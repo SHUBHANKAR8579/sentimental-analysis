@@ -1,0 +1,133 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import classification_report, confusion_matrix
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import re
+
+# Ensure NLTK data is available
+def download_nltk_data():
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
+
+# Download necessary NLTK data
+download_nltk_data()
+
+# 1. Data Loading and Preprocessing
+def load_data(file_path):
+    columns = ['polarity', 'id', 'date', 'query', 'user', 'text']
+    df = pd.read_csv(file_path, encoding='latin-1', names=columns)
+    return df
+
+# 2. Exploratory Data Analysis
+def explore_data(df):
+    print(df.head())
+    print(df.info())
+    print(df['polarity'].value_counts())
+    
+    plt.figure(figsize=(8, 6))
+    polarity_counts = df['polarity'].value_counts().sort_index()
+    plt.bar(polarity_counts.index.astype(str), polarity_counts.values)
+    plt.title('Distribution of Sentiment Polarity')
+    plt.xlabel('Polarity')
+    plt.ylabel('Count')
+    plt.show()
+
+# 3. Text Preprocessing
+def preprocess_text(text):
+    # Convert to lowercase
+    text = text.lower()
+    # Remove special characters and numbers
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    # Tokenize
+    tokens = word_tokenize(text)
+    # Remove stopwords
+    stop_words = set(stopwords.words('english'))
+    tokens = [token for token in tokens if token not in stop_words]
+    # Join tokens back into string
+    return ' '.join(tokens)
+
+# 4. Feature Extraction
+def extract_features(df):
+    tfidf = TfidfVectorizer(max_features=5000)
+    X = tfidf.fit_transform(df['processed_text'])
+    y = df['polarity'].astype(int)  # Ensure polarity is int
+    return X, y, tfidf
+
+# 5. Model Selection and Training
+def train_model(X_train, y_train):
+    model = MultinomialNB()
+    model.fit(X_train, y_train)
+    return model
+
+# 6. Evaluation
+def evaluate_model(model, X_test, y_test):
+    y_pred = model.predict(X_test)
+    print(classification_report(y_test, y_pred))
+    
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(8, 6))
+    plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    plt.title('Confusion Matrix')
+    plt.colorbar()
+    tick_marks = np.arange(len(set(y_test)))
+    plt.xticks(tick_marks, set(y_test), rotation=45)
+    plt.yticks(tick_marks, set(y_test))
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+
+    # Add text annotations
+    thresh = cm.max() / 2.
+    for i, j in np.ndindex(cm.shape):
+        plt.text(j, i, format(cm[i, j], 'd'),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.show()
+
+# 7. Analysis of Results
+def analyze_results(df, model, tfidf):
+    # Get feature names
+    feature_names = tfidf.get_feature_names_out()
+    
+    # Get feature importance for each class
+    for i, category in enumerate(model.classes_):
+        top_features = np.argsort(model.feature_log_prob_[i])[-10:]
+        print(f"\nTop 10 features for category {category}:")
+        for j in top_features:
+            print(feature_names[j])
+
+# Main function
+def main(file_path):
+    df = load_data(file_path)
+    
+    # Remove rows with invalid polarity values
+    df = df[df['polarity'].isin(['0', '4'])]
+    
+    explore_data(df)
+    
+    df['processed_text'] = df['text'].apply(preprocess_text)
+    
+    X, y, tfidf = extract_features(df)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    model = train_model(X_train, y_train)
+    evaluate_model(model, X_test, y_test)
+    analyze_results(df, model, tfidf)
+
+# Run the analysis
+if _name_ == "_main_":
+    file_path = "training.csv"
+    main(file_path)
