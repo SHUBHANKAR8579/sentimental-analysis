@@ -1,0 +1,1 @@
+the above files punkt and stopwards are the packages for the sentimental analysis so you should download the two files and make a folder in C drive with name "nltk_data" and place both zip files in it.
